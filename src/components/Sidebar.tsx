@@ -8,6 +8,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Smartphone,
   Trash2,
   X,
 } from "lucide-react";
@@ -29,6 +30,7 @@ interface SidebarProps {
   onExportActiveConversation: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
+  onOpenApkModal?: () => void;
 }
 
 function formatRelativeDate(timestamp: number): string {
@@ -59,6 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onExportActiveConversation,
   isOpenMobile,
   onCloseMobile,
+  onOpenApkModal,
 }) => {
   const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -383,6 +386,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             )}
           </>
+        )}
+
+        {onOpenApkModal && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={onOpenApkModal}
+              className="w-full py-2 px-3 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 text-teal-700 dark:text-teal-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Android APK / Install App</span>
+            </button>
+          </div>
         )}
       </div>
 

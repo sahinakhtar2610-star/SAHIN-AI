@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "SAHIN AI - 4K Visual & Motion Studio",
+  "short_name": "SAHIN AI",
+  "description": "SAHIN AI: 4K Image Synthesis, 10-Second Cinematic Motion Video, and Natural Voice Studio.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090d16",
+  "theme_color": "#0f766e",
+  "categories": ["productivity", "utilities", "entertainment"],
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

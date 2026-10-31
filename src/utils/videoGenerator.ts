@@ -54,7 +54,7 @@ export async function generateVideoFromPhoto(
   options: VideoGenOptions = {}
 ): Promise<{ videoUrl: string; duration: number; mimeType: string }> {
   const {
-    durationSeconds = 4.5,
+    durationSeconds = 10,
     fps = 30,
     motionPreset = "cinematic_zoom",
     onProgress,

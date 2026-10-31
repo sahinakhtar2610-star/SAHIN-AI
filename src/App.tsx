@@ -11,6 +11,7 @@ import {
   Languages,
   Menu,
   Moon,
+  Smartphone,
   Sun,
   Video,
   X,
@@ -36,6 +37,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatMessageItem } from "./components/ChatMessageItem";
 import { ChatInput } from "./components/ChatInput";
 import { CapabilitiesModal } from "./components/CapabilitiesModal";
+import { ApkInstallModal } from "./components/ApkInstallModal";
 import { AppSplashScreen } from "./components/AppSplashScreen";
 import { LoginModal } from "./components/LoginModal";
 import { useAuth } from "./context/AuthContext";
@@ -246,6 +248,7 @@ export function App() {
     open: boolean;
     tab: "capabilities" | "shortcuts";
   }>({ open: false, tab: "capabilities" });
+  const [isApkModalOpen, setIsApkModalOpen] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -613,6 +616,10 @@ export function App() {
       if (isFirstTurn) {
         generateAutoTitle(convId, promptText, "AI Image Creation");
       }
+
+      if (voiceAutoSpeak) {
+        speakAssistantText(assistantMessageId, caption);
+      }
     } catch (err: unknown) {
       const errorMsg =
         err instanceof Error ? err.message : "Failed to synthesize image.";
@@ -694,7 +701,7 @@ export function App() {
       // 2. Client-side synthesis fallback (guarantees 100% video creation success with SAHIN AI watermark)
       if (!finalVideoUrl) {
         const clientSynth = await generateVideoFromPhoto(sourceImageUrl, {
-          durationSeconds: 4.5,
+          durationSeconds: 10,
           fps: 30,
           motionPreset: "cinematic_zoom",
         });
@@ -702,8 +709,8 @@ export function App() {
       }
 
       const caption = isBengali
-        ? `আপনার ফটো থেকে সফলভাবে মোশন ভিডিও তৈরি করা হয়েছে:`
-        : `Here is your animated video generated from your photo:`;
+        ? `আপনার ফটো থেকে সফলভাবে ১০ সেকেন্ডের মোশন ভিডিও তৈরি করা হয়েছে:`
+        : `Here is your 10-second animated video generated from your photo:`;
 
       setConversations((prev) =>
         prev.map((c) =>
@@ -723,7 +730,7 @@ export function App() {
                             url: finalVideoUrl,
                             sourceImageUrl,
                             prompt: promptText || "Photo Motion Animation",
-                            durationSeconds: 4.5,
+                            durationSeconds: 10,
                             modelUsed: "SAHIN-AI-Motion-Studio",
                             createdAt: Date.now(),
                           },
@@ -737,6 +744,10 @@ export function App() {
 
       if (isFirstTurn) {
         generateAutoTitle(convId, promptText || "Photo to Video", "AI Video");
+      }
+
+      if (voiceAutoSpeak) {
+        speakAssistantText(assistantMessageId, caption);
       }
     } catch (err: unknown) {
       const errorMsg =
@@ -836,7 +847,10 @@ export function App() {
     const attachmentsToSend = options?.overrideAttachments ?? attachments;
     const useSearch = options?.overrideWebSearch ?? webSearchEnabled;
     const isVideoGen = Boolean(
-      options?.forceVideoGen || isVideoGenerationIntent(textToSend)
+      options?.forceVideoGen || videoGenMode || isVideoGenerationIntent(textToSend)
+    );
+    const isVoiceGen = Boolean(
+      voiceAutoSpeak || isVoiceGenerationIntent(textToSend)
     );
     const isImageGen = Boolean(
       !isVideoGen &&
@@ -935,12 +949,63 @@ export function App() {
         }
       }
 
+      // If no photo was attached, synthesize the 4K base image from the prompt first, then animate it into video!
+      if (!imageToAnimate) {
+        const videoPrompt = textToSend || "Cinematic 4K nature motion";
+        const isBengali = /[\u0980-\u09FF]/.test(videoPrompt);
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id !== targetConvId
+              ? c
+              : {
+                  ...c,
+                  updatedAt: now,
+                  messages: c.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? {
+                          ...m,
+                          content: isBengali
+                            ? "🎬 SAHIN AI আপনার প্রম্পট থেকে ৪কে সিন প্রস্তুত করে ১০ সেকেন্ডের মোশন ভিডিও তৈরি করছে, কয়েক সেকেন্ড অপেক্ষা করুন..."
+                            : "🎬 Synthesizing 4K scene & rendering 10-second cinematic video with SAHIN AI...",
+                        }
+                      : m
+                  ),
+                }
+          )
+        );
+
+        try {
+          const imgResp = await fetch("/api/generate-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: videoPrompt, aspectRatio: "16:9" }),
+          });
+          const imgData = await imgResp.json();
+          if (imgResp.ok && imgData.success && imgData.imageUrl) {
+            imageToAnimate = imgData.imageUrl;
+            try {
+              imageToAnimate = await stampAppBrandWatermark(imgData.imageUrl, {
+                appName: "SAHIN AI",
+                logoUrl: "/logo.png",
+                tagline: "4K ULTRA HD",
+                position: "bottom-right",
+              });
+            } catch {
+              // Ignore watermark stamp fallback
+            }
+          }
+        } catch (imgErr) {
+          console.warn("Base image generation for video failed:", imgErr);
+        }
+      }
+
       if (imageToAnimate) {
         await generateVideoReply(
           targetConvId,
           assistantMessageId,
           imageToAnimate,
-          textToSend || "Photo Motion Animation",
+          textToSend || "Cinematic Motion Video",
           isFirstTurn
         );
         return;
@@ -964,7 +1029,8 @@ export function App() {
       assistantMessageId,
       useSearch,
       isFirstTurn,
-      textToSend || "Analyze uploaded image"
+      textToSend || "Analyze uploaded image",
+      isVoiceGen
     );
   };
 
@@ -1031,6 +1097,12 @@ export function App() {
     if (starter.enableWebSearch !== undefined) {
       setWebSearchEnabled(nextWebSearch);
     }
+    if (starter.isVoice) {
+      setVoiceAutoSpeak(true);
+    }
+    if (starter.isVideoGen) {
+      setVideoGenMode(true);
+    }
 
     let sampleAttachments: Attachment[] = [];
     if (starter.attachSampleImage) {
@@ -1042,6 +1114,7 @@ export function App() {
       overrideAttachments: sampleAttachments,
       overrideWebSearch: nextWebSearch,
       forceImageGen: starter.isImageGen,
+      forceVideoGen: starter.isVideoGen,
     });
   };
 
@@ -1204,6 +1277,7 @@ export function App() {
           onExportActiveConversation={handleExportMarkdown}
           isOpenMobile={isMobileSidebarOpen}
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          onOpenApkModal={() => setIsApkModalOpen(true)}
         />
       )}
 
@@ -1284,8 +1358,19 @@ export function App() {
             </button>
           </nav>
 
-          {/* Zone 3: Header Actions (Reading Mode Toggle & Theme Toggle) */}
+          {/* Zone 3: Header Actions (Reading Mode Toggle, APK Install & Theme Toggle) */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Android APK Install Button */}
+            <button
+              type="button"
+              onClick={() => setIsApkModalOpen(true)}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-300 hover:bg-teal-500/20 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
+              title="Android APK ডাউনলোড ও ইনস্টল করুন"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>APK Install</span>
+            </button>
+
             {/* Reading Mode Toggle Button */}
             <button
               type="button"
@@ -1509,6 +1594,15 @@ export function App() {
             onToggleWebSearch={() => setWebSearchEnabled((prev) => !prev)}
             imageGenMode={imageGenMode}
             onToggleImageGen={() => setImageGenMode((prev) => !prev)}
+            videoGenMode={videoGenMode}
+            onToggleVideoGen={() => setVideoGenMode((prev) => !prev)}
+            voiceAutoSpeak={voiceAutoSpeak}
+            onToggleVoiceAutoSpeak={() => {
+              if (voiceAutoSpeak) {
+                stopAllSpeech();
+              }
+              setVoiceAutoSpeak((prev) => !prev);
+            }}
             isStreaming={isStreaming}
             onSend={() => sendMessage()}
             onStop={handleStopStreaming}
@@ -1521,6 +1615,12 @@ export function App() {
         isOpen={modalState.open}
         initialTab={modalState.tab}
         onClose={() => setModalState((s) => ({ ...s, open: false }))}
+      />
+
+      {/* Android APK & PWA Install Modal */}
+      <ApkInstallModal
+        isOpen={isApkModalOpen}
+        onClose={() => setIsApkModalOpen(false)}
       />
 
       {/* Full-Resolution Image Lightbox Modal */}
